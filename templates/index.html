@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>智能网关监控系统</title>
+    <style>
+        body {font-family: Arial; max-width: 800px; margin: 20px auto; padding: 20px;}
+        .card {border: 1px solid #ccc; padding: 20px; margin: 10px 0; border-radius: 8px;}
+        .alarm {color: red; font-weight: bold;}
+        button {padding: 10px 20px; margin: 5px; cursor: pointer;}
+        .modal {display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);}
+        .modal-content {background-color: white; margin: 10% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 600px; position: relative;}
+        .close {position: absolute; right: 15px; top: 10px; font-size: 24px; cursor: pointer;}
+        .chat-container {height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin: 10px 0;}
+        .message {margin: 10px 0; padding: 10px; border-radius: 5px;}
+        .user-message {background-color: #e3f2fd; align-self: flex-end;}
+        .ai-message {background-color: #f5f5f5; align-self: flex-start;}
+        .typing-indicator {display: flex; align-items: center; padding: 10px;}
+        .typing-dot {width: 8px; height: 8px; border-radius: 50%; background-color: #3b82f6; margin: 0 2px; animation: bounce 1.4s infinite ease-in-out both;}
+        .typing-dot:nth-child(1) {animation-delay: -0.32s;}
+        .typing-dot:nth-child(2) {animation-delay: -0.16s;}
+        @keyframes bounce {0%, 80%, 100% {transform: scale(0);} 40% {transform: scale(1);}}
+    </style>
+</head>
+<body>
+    <h1>智能网关监控系统</h1>
+    
+    <div class="card">
+        <h2>本地环境数据</h2>
+        <p>温度：{{ data.temp }} ℃ <span class="{{ 'alarm' if data.alarm == '高温报警' else '' }}">{{ data.alarm }}</span></p>
+        <p>湿度：{{ data.humidity }} %</p>
+    </div>
+
+    <div class="card">
+        <h2>实时天气数据</h2>
+        <p>室外温度：{{ data.weather_temp }} ℃</p>
+        <p>室外湿度：{{ data.weather_hum }} %</p>
+        <p>天气状况：{{ data.weather_text }}</p>
+    </div>
+
+    <div class="card">
+        <h2>设备控制</h2>
+        <button onclick="sendCmd('open_window')">开窗</button>
+        <button onclick="sendCmd('close_window')">关窗</button>
+        <button onclick="sendCmd('auto_mode')">自动模式</button>
+        <button onclick="openAIChat()">AI助手</button>
+        <p id="cmd_msg"></p>
+    </div>
+
+    <!-- AI聊天模态框 -->
+    <div id="ai-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeAIChat()">&times;</span>
+            <h2>AI智能助手</h2>
+            <div id="chat-container" class="chat-container">
+                <div class="message ai-message">你好！我是智能助手，有什么可以帮助你的？</div>
+            </div>
+            <div style="display: flex;">
+                <input type="text" id="chat-input" style="flex: 1; padding: 10px;" placeholder="输入你的问题...">
+                <button onclick="sendChatMessage()" style="margin-left: 10px;">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 定时刷新数据
+        setInterval(() => {
+            window.location.reload();
+        }, 3000);
+
+        // 发送控制指令
+        function sendCmd(cmd) {
+            fetch('/api/send_cmd', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({cmd: cmd})
+            }).then(res => res.json())
+              .then(data => {
+                  document.getElementById('cmd_msg').innerText = data.msg;
+                  setTimeout(() => {
+                      document.getElementById('cmd_msg').innerText = '';
+                  }, 2000);
+              });
+        }
+
+        // 打开AI聊天窗口
+        function openAIChat() {
+            document.getElementById('ai-modal').style.display = 'block';
+        }
+
+        // 关闭AI聊天窗口
+        function closeAIChat() {
+            document.getElementById('ai-modal').style.display = 'none';
+        }
+
+        // 发送聊天消息
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // 添加用户消息
+            addMessage('user', message);
+            input.value = '';
+            
+            // 显示AI思考状态
+            showTypingIndicator();
+            
+            // 获取当前环境数据
+            fetch('/api/data')
+                .then(res => res.json())
+                .then(data => {
+                    // 发送消息到AI
+                    return fetch('/api/ai_chat', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            message: message,
+                            environment: data
+                        })
+                    });
+                })
+                .then(res => res.json())
+                .then(data => {
+                    // 移除打字指示器
+                    removeTypingIndicator();
+                    // 添加AI回复
+                    addMessage('ai', data.response);
+                })
+                .catch(error => {
+                    removeTypingIndicator();
+                    addMessage('ai', '抱歉，我暂时无法处理你的请求，请稍后再试。');
+                });
+        }
+
+        // 添加消息到聊天窗口
+        function addMessage(type, text) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            messageDiv.innerText = text;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // 显示AI思考状态
+        function showTypingIndicator() {
+            const chatContainer = document.getElementById('chat-container');
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typing-indicator';
+            typingDiv.className = 'message ai-message';
+            typingDiv.innerHTML = `
+                <div style="display: flex; align-items: center;">
+                    <span>AI正在思考...</span>
+                    <div style="display: flex; margin-left: 10px;">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            chatContainer.appendChild(typingDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // 移除打字指示器
+        function removeTypingIndicator() {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('ai-modal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // 回车发送消息
+        document.getElementById('chat-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+    </script>
+</body>
+</html>
+    

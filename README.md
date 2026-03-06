@@ -8,6 +8,14 @@ SmartGatewayMonitor 是一套面向智能家居场景的综合监控系统，融
 
 系统通过实时采集环境数据、提供多种控制模式（手动、自动、AI）以及基于本地 LLM 模型的智能决策，为用户打造更加舒适、智能的家居环境。
 
+
+
+<img width="348" height="256" alt="image" src="https://github.com/user-attachments/assets/109e5717-98d9-46c0-a0b4-b314644766ae" />
+
+<img width="333" height="249" alt="image" src="https://github.com/user-attachments/assets/a943117a-2b61-4742-9897-c614d9777425" />
+
+
+
 ## 功能特性
 
 ### 🔍 环境数据监控
